@@ -135,14 +135,14 @@ class RachioPlatform {
         let accessory
         if (cachedDevice) {
           this.log('Device ' + device.name + ' is cached')
-          if (device.enabled) {
-            accessory = cachedDevice
-          } else {
-            this.log(`Removing Rachio Controller '${device.name}' because it is disabled.`)
+          // if (device.enabled) {
+          //   accessory = cachedDevice
+          // } else {
+            this.log(`Removing Rachio Controller '${device.name}'.`)
             this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [cachedDevice]);
-          }
+          // }
         } else if (device.enabled) {
-          accessory = this.addDevice(device)
+          // accessory = this.addDevice(device)
         } else {
           this.log(`Skipping Rachio Controller '${device.name}' because it is disabled.`)
         }
