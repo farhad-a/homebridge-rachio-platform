@@ -125,22 +125,35 @@ class RachioPlatform {
       // Refresh all Rachio devices (and zones) associated with the api_key
       const devices = await this.client.getDevices()
       for (const device of devices) {
-        this.log(`Loading Rachio device: ${device.name} - ${device.id}`)
+        device.enabled = !this.config.device_id || (this.config.device_id && this.config.device_id  === device.id);
+
+        if (device.enabled) {
+          this.log(`Loading Rachio device: ${device.name} - ${device.id}`)
+        }
 
         const cachedDevice = this.accessories.find(accessory => accessory.UUID === device.id)
         let accessory
         if (cachedDevice) {
           this.log('Device ' + device.name + ' is cached')
-          accessory = cachedDevice
-        } else {
+          if (device.enabled) {
+            accessory = cachedDevice
+          } else {
+            this.log(`Removing Rachio Controller '${device.name}' because it is disabled.`)
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [cachedDevice]);
+          }
+        } else if (device.enabled) {
           accessory = this.addDevice(device)
+        } else {
+          this.log(`Skipping Rachio Controller '${device.name}' because it is disabled.`)
         }
 
-        accessory
-          .getService(Service.AccessoryInformation)
-          .setCharacteristic(Characteristic.Manufacturer, 'Rachio')
-          .setCharacteristic(Characteristic.Model, device.model)
-          .setCharacteristic(Characteristic.SerialNumber, device.serialNumber)
+        if (device.enabled && accessory) {
+          accessory
+            .getService(Service.AccessoryInformation)
+            .setCharacteristic(Characteristic.Manufacturer, 'Rachio')
+            .setCharacteristic(Characteristic.Model, device.model)
+            .setCharacteristic(Characteristic.SerialNumber, device.serialNumber)
+        }
 
         // Get all the zones for this Rachio device and sort by zone number
         let zones = await device.getZones()
@@ -153,25 +166,27 @@ class RachioPlatform {
 
           if (cachedZone) {
             this.log('Zone ' + zone.name + ' is cached')
-            if (zone.enabled) {
+            if (device.enabled && zone.enabled) {
               this.updateZoneAccessory(cachedZone, zone)
             } else {
               this.log('Removing Zone Number ' + zone.zoneNumber + ' because it is disabled.')
               this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [cachedZone])
             }
-          } else if (zone.enabled) {
+          } else if (device.enabled && zone.enabled) {
             this.addZone(zone)
-          } else {
+          } else if (device.enabled) {
             this.log('Skipping Zone Number ' + zone.zoneNumber + ' because it is disabled.')
           }
         }
 
-        // Determine which zone (if any) is active for this Rachio controller
-        const activeZone = await device.getActiveZone()
-        this.log.debug('Active zone for device ' + device.id + ': ' + (activeZone && activeZone.id))
-        if (activeZone) this.activeZones[activeZone.id] = true
+        if (device.enabled) {
+          // Determine which zone (if any) is active for this Rachio controller
+          const activeZone = await device.getActiveZone()
+          this.log.debug('Active zone for device ' + device.id + ': ' + (activeZone && activeZone.id))
+          if (activeZone) this.activeZones[activeZone.id] = true
 
-        this.configureWebhooks(this.config.external_webhook_address, device.id)
+          this.configureWebhooks(this.config.external_webhook_address, device.id)
+        }
       }
       this.log('Devices refreshed')
     } catch (e) {
